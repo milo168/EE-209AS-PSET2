@@ -4,10 +4,14 @@
 #include <time.h>
 #include <utility>
 #include <vector>
+#include <algorithm>
+#include <thread>
+#include <chrono>
+#include <iomanip>
 using namespace std;
 
-int GRIDWORLD_ROWS = 6;
-int GRIDWORLD_COLUMNS = 6;
+#define GRIDWORLD_ROWS 6
+#define GRIDWORLD_COLUMNS 6
 
 struct state {
 	int x;
@@ -447,7 +451,7 @@ state get_next_state(double errorProbability, state current, ACTIONS action) {
 	return next;
 }
 
-double get_reward(double** gridWorld, state current) {
+double get_reward(double gridWorld[GRIDWORLD_ROWS][GRIDWORLD_COLUMNS], state current) {
 	return gridWorld[GRIDWORLD_ROWS-current.y-1][current.x];
 }
 
@@ -674,22 +678,106 @@ void generate_and_plot(ACTIONS*** action_policies, state initial, double errorPr
 	delete[] gridPrint;
 }
 
+void evaulate_policy(double gridWorld[][GRIDWORLD_COLUMNS], double errorProbability, double discountFactor, int goalX, int goalY) {
+	double*** values_for_states = new double**[GRIDWORLD_ROWS];
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+		values_for_states[i] = new double*[GRIDWORLD_COLUMNS];
+		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+			values_for_states[i][j] = new double[12];
+			for (int k = 0; k < 12; k++) {
+				values_for_states[i][j][k] = 0.0;
+			}
+		}
+	}
+
+	int iterations = 0;
+
+	while (true) {
+		double delta = 0;
+		for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+			for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+				for (int k = 0; k < 12; k++) {
+					
+					double temp = values_for_states[GRIDWORLD_ROWS - i - 1][j][k];
+					state current;
+					current.y = i;
+					current.x = j;
+					current.clock = k;
+
+					for (int a = 0; a < GRIDWORLD_ROWS; a++) {
+						for (int b = 0; b < GRIDWORLD_COLUMNS; b++) {
+							for (int c = 0; c < 12; c++) {
+								state next;
+								next.y = a;
+								next.x = b;
+								next.clock = c;
+
+								values_for_states[GRIDWORLD_ROWS-i-1][j][k] += transition_probability(errorProbability, current, next, get_action(current, goalX, goalY)) *
+									(get_reward(gridWorld, next) + discountFactor * values_for_states[GRIDWORLD_ROWS-a-1][b][c]);
+								//cout << "TRANSITION PROBABILITY: " << transition_probability(errorProbability, current, next, get_action(current, goalX, goalY)) << "\n";
+								//cout << "CURRENT STATE: " << current.x << " " << current.y << " " << current.clock << "\n";
+								//cout << "ITER VALUE: " << b << " " << a << " " << c  << " " << values_for_states[GRIDWORLD_ROWS - i - 1][j][k] << "\n";
+							}
+						}
+					}
+					delta = max(delta, abs(temp - values_for_states[GRIDWORLD_ROWS-i-1][j][k]));
+					//cout << "Iterating at: " << iterations << " " << delta << "\n";
+					//if(i > 1)
+					//return;
+				}
+			}
+		}
+		iterations++;
+		cout << ios::fixed;
+		cout << "Iterating at: " << iterations << " " << delta << "\n";
+		for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+			for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+				cout << setprecision(3) << values_for_states[GRIDWORLD_ROWS - i - 1][j][0] << "\t\t";
+			}
+			cout << "\n";
+		}
+		cout << "\n\n\n";
+		this_thread::sleep_for(chrono::seconds(5));
+		if (delta < 0.1) {
+			break;
+		}
+	}
+
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+			cout << values_for_states[GRIDWORLD_ROWS - i - 1][j][0] << " ";
+		}
+		cout << "\n";
+	}
+
+}
+
 int main(int argc, char** argv) {
 	srand(time(NULL));
 
+	double gridWorld[GRIDWORLD_ROWS][GRIDWORLD_COLUMNS] = 
+	{ 
+	{-100,	-100,	-100,	-100,	-100,	-100},
+	{-100,	0,		-1,		1,		-1,		-100},
+	{-100,	0,		-1,		0,		-1,		-100},
+	{-100,	0,		-1,		0,		-1,		-100},
+	{-100,	0,		0,		0,		0,		-100},
+	{-100,	-100,	-100,	-100,	-100,	-100},
+	};
+
 	state current;
-	current.x = 2;
+	current.x = 1;
 	current.y = 3;
-	current.clock = 8;
+	current.clock = 6;
 
 	state goal;
-	goal.x = 5;
-	goal.y = 5;
+	goal.x = 3;
+	goal.y = 4;
 
-	double errorProbability = 0.45;
+	double errorProbability = 0.0;
+	double discountFactor = 0.1;
 
 	//get_next_state(errorProbability,current, BACKWARD_STILL);
-
 	ACTIONS*** action_policies = get_initial_actions(goal.x, goal.y);
 	/*for (int i = 0; i < GRIDWORLD_ROWS; i++) {
 		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
@@ -697,6 +785,8 @@ int main(int argc, char** argv) {
 		}
 		cout << "\n";
 	}*/
+
+	evaulate_policy( gridWorld, errorProbability, discountFactor, goal.x, goal.y);
 	generate_and_plot(action_policies, current, errorProbability, goal.x, goal.y);
 
 	return 0;
