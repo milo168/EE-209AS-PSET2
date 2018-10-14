@@ -615,12 +615,12 @@ ACTIONS get_action(state current, int goalX, int goalY) {
 	
 }
 
-ACTIONS*** get_initial_actions(int goalX, int goalY) {
-	ACTIONS*** init_actions_space = new ACTIONS**[GRIDWORLD_ROWS];
+ACTIONS*** get_initial_actions(state goal) {
+	ACTIONS*** actionPolicies = new ACTIONS**[GRIDWORLD_ROWS];
 	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
-		init_actions_space[i] = new ACTIONS*[GRIDWORLD_COLUMNS];
+		actionPolicies[i] = new ACTIONS*[GRIDWORLD_COLUMNS];
 		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
-			init_actions_space[i][j] = new ACTIONS[12];
+			actionPolicies[i][j] = new ACTIONS[12];
 		}
 	}
 
@@ -631,21 +631,21 @@ ACTIONS*** get_initial_actions(int goalX, int goalY) {
 				current.x = j;
 				current.y = GRIDWORLD_ROWS - i - 1;
 				current.clock = k;
-				init_actions_space[GRIDWORLD_ROWS-i-1][j][k] = get_action(current, goalX, goalY);
+				actionPolicies[GRIDWORLD_ROWS-i-1][j][k] = get_action(current, goal.x, goal.y);
  			}
 		}
 	}
-	return init_actions_space;
+	return actionPolicies;
 }
 
-void generate_and_plot(ACTIONS*** action_policies, state initial, double errorProbability, int goalX, int goalY) {
+void generate_and_plot(ACTIONS*** action_policies, state initial, double errorProbability, state goal) {
 	int MAX_STEPS = GRIDWORLD_ROWS * GRIDWORLD_COLUMNS * 12 * 100;
 	int count = 0;
 	state generated = initial;
 	vector<state> history;
 
 	history.push_back(generated);
-	while ((generated.x != goalX || generated.y != goalY) && count < MAX_STEPS) {
+	while ((generated.x != goal.x || generated.y != goal.y) && count < MAX_STEPS) {
 		generated = get_next_state(errorProbability, generated, action_policies[generated.y][generated.x][generated.clock]);
 		history.push_back(generated);
 		count++;
@@ -661,7 +661,7 @@ void generate_and_plot(ACTIONS*** action_policies, state initial, double errorPr
 
 	for (int i = 0; i < history.size(); i++) {
 		gridPrint[history[i].y][history[i].x] = 'x';
-		cout << history[i].x << " " << history[i].y << " " << history[i].clock << "\n";
+		//cout << history[i].x << " " << history[i].y << " " << history[i].clock << "\n";
 	}
 
 	cout << "\n";
@@ -678,7 +678,8 @@ void generate_and_plot(ACTIONS*** action_policies, state initial, double errorPr
 	delete[] gridPrint;
 }
 
-void evaulate_policy(double gridWorld[][GRIDWORLD_COLUMNS], double errorProbability, double discountFactor, int goalX, int goalY) {
+double*** evaulate_policy(double gridWorld[][GRIDWORLD_COLUMNS], ACTIONS*** actionPolicies, double errorProbability, double discountFactor) {
+
 	double*** values_for_states = new double**[GRIDWORLD_ROWS];
 	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
 		values_for_states[i] = new double*[GRIDWORLD_COLUMNS];
@@ -690,7 +691,16 @@ void evaulate_policy(double gridWorld[][GRIDWORLD_COLUMNS], double errorProbabil
 		}
 	}
 
-	int iterations = 0;
+	double*** values_for_states2 = new double**[GRIDWORLD_ROWS];
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+		values_for_states2[i] = new double*[GRIDWORLD_COLUMNS];
+		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+			values_for_states2[i][j] = new double[12];
+			for (int k = 0; k < 12; k++) {
+				values_for_states2[i][j][k] = 0;
+			}
+		}
+	}
 
 	while (true) {
 		double delta = 0;
@@ -698,9 +708,9 @@ void evaulate_policy(double gridWorld[][GRIDWORLD_COLUMNS], double errorProbabil
 			for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
 				for (int k = 0; k < 12; k++) {
 					
-					double temp = values_for_states[GRIDWORLD_ROWS - i - 1][j][k];
+					double temp = values_for_states2[GRIDWORLD_ROWS - i - 1][j][k];
 					state current;
-					current.y = i;
+					current.y = GRIDWORLD_ROWS - i - 1;
 					current.x = j;
 					current.clock = k;
 
@@ -708,48 +718,220 @@ void evaulate_policy(double gridWorld[][GRIDWORLD_COLUMNS], double errorProbabil
 						for (int b = 0; b < GRIDWORLD_COLUMNS; b++) {
 							for (int c = 0; c < 12; c++) {
 								state next;
-								next.y = a;
+								next.y = GRIDWORLD_ROWS - a - 1;
 								next.x = b;
 								next.clock = c;
 
-								values_for_states[GRIDWORLD_ROWS-i-1][j][k] += transition_probability(errorProbability, current, next, get_action(current, goalX, goalY)) *
-									(get_reward(gridWorld, next) + discountFactor * values_for_states[GRIDWORLD_ROWS-a-1][b][c]);
-								//cout << "TRANSITION PROBABILITY: " << transition_probability(errorProbability, current, next, get_action(current, goalX, goalY)) << "\n";
-								//cout << "CURRENT STATE: " << current.x << " " << current.y << " " << current.clock << "\n";
-								//cout << "ITER VALUE: " << b << " " << a << " " << c  << " " << values_for_states[GRIDWORLD_ROWS - i - 1][j][k] << "\n";
+								values_for_states[GRIDWORLD_ROWS-i-1][j][k] += transition_probability(errorProbability, current, next, actionPolicies[current.y][current.x][current.clock]) *
+									(get_reward(gridWorld, current) + discountFactor * values_for_states2[GRIDWORLD_ROWS-a-1][b][c]);
 							}
 						}
 					}
 					delta = max(delta, abs(temp - values_for_states[GRIDWORLD_ROWS-i-1][j][k]));
-					//cout << "Iterating at: " << iterations << " " << delta << "\n";
-					//if(i > 1)
-					//return;
 				}
 			}
 		}
-		iterations++;
-		cout << ios::fixed;
-		cout << "Iterating at: " << iterations << " " << delta << "\n";
-		for (int i = 0; i < GRIDWORLD_ROWS; i++) {
-			for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
-				cout << setprecision(3) << values_for_states[GRIDWORLD_ROWS - i - 1][j][0] << "\t\t";
+
+		for (int a = 0; a < GRIDWORLD_ROWS; a++) {
+			for (int b = 0; b < GRIDWORLD_COLUMNS; b++) {
+				for (int c = 0; c < 12; c++) {
+
+					values_for_states2[GRIDWORLD_ROWS - a - 1][b][c] = values_for_states[GRIDWORLD_ROWS - a - 1][b][c];
+					values_for_states[GRIDWORLD_ROWS - a - 1][b][c] = 0;
+				}
+			}
+		}
+
+		//this_thread::sleep_for(chrono::seconds(5));
+		if (delta < 0.001) {
+			break;
+		}
+	}
+
+	/*for (int c = 0; c < 12; c++) {
+		for (int a = 0; a < GRIDWORLD_ROWS; a++) {
+			for (int b = 0; b < GRIDWORLD_COLUMNS; b++) {
+				cout << values_for_states2[GRIDWORLD_ROWS - a - 1][b][c] << ",";
 			}
 			cout << "\n";
 		}
-		cout << "\n\n\n";
-		this_thread::sleep_for(chrono::seconds(5));
-		if (delta < 0.1) {
-			break;
+		cout << "\n";
+	}*/
+
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+			delete[] values_for_states[i][j];
+		}
+		delete[] values_for_states[i];
+	}
+	delete[] values_for_states;
+
+	return values_for_states2;
+}
+
+ACTIONS*** change_policy(double*** values_for_states, double gridWorld[][GRIDWORLD_COLUMNS], double errorProbability, double discountFactor) {
+	ACTIONS*** actionsToTake = new ACTIONS**[GRIDWORLD_ROWS];
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+		actionsToTake[i] = new ACTIONS*[GRIDWORLD_COLUMNS];
+		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+			actionsToTake[i][j] = new ACTIONS[12];
 		}
 	}
 
 	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
 		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
-			cout << values_for_states[GRIDWORLD_ROWS - i - 1][j][0] << " ";
+			for (int k = 0; k < 12; k++) {
+				state current;
+				current.y = GRIDWORLD_ROWS - i - 1;
+				current.x = j;
+				current.clock = k;
+
+				double checkActions[7] = { 0.0 };
+				for (int a = 0; a < GRIDWORLD_ROWS; a++) {
+					for (int b = 0; b < GRIDWORLD_COLUMNS; b++) {
+						for (int c = 0; c < 12; c++) {
+							state next;
+							next.y = GRIDWORLD_ROWS - a - 1;
+							next.x = b;
+							next.clock = c;
+
+							checkActions[0] += transition_probability(errorProbability, current, next, STILL) *
+								(get_reward(gridWorld, current) + discountFactor * values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
+							checkActions[1] += transition_probability(errorProbability, current, next, BACKWARD_LEFT) *
+								(get_reward(gridWorld, current) + discountFactor * values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
+							checkActions[2] += transition_probability(errorProbability, current, next, BACKWARD_RIGHT) *
+								(get_reward(gridWorld, current) + discountFactor * values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
+							checkActions[3] += transition_probability(errorProbability, current, next, FORWARD_LEFT) *
+								(get_reward(gridWorld, current) + discountFactor * values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
+							checkActions[4] += transition_probability(errorProbability, current, next, FORWARD_RIGHT) *
+								(get_reward(gridWorld, current) + discountFactor * values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
+							checkActions[5] += transition_probability(errorProbability, current, next, BACKWARD_STILL) *
+								(get_reward(gridWorld, current) + discountFactor * values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
+							checkActions[6] += transition_probability(errorProbability, current, next, FORWARD_STILL) *
+								(get_reward(gridWorld, current) + discountFactor * values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
+						}
+					}
+				}
+				double val = checkActions[0];
+				int index = 0;
+				for (int i = 0; i < 7; i++) {
+					if(val < checkActions[i]){
+						index = i;
+						val = checkActions[i];
+					}
+				}
+				switch (index) {
+				case 0:
+					actionsToTake[GRIDWORLD_ROWS - i - 1][j][k] = STILL;
+					break;
+				case 1:
+					actionsToTake[GRIDWORLD_ROWS - i - 1][j][k] = BACKWARD_LEFT;
+					break;
+				case 2:
+					actionsToTake[GRIDWORLD_ROWS - i - 1][j][k] = BACKWARD_RIGHT;
+					break;
+				case 3:
+					actionsToTake[GRIDWORLD_ROWS - i - 1][j][k] = FORWARD_LEFT;
+					break;
+				case 4:
+					actionsToTake[GRIDWORLD_ROWS - i - 1][j][k] = FORWARD_RIGHT;
+					break;
+				case 5:
+					actionsToTake[GRIDWORLD_ROWS - i - 1][j][k] = BACKWARD_STILL;
+					break;
+				case 6:
+					actionsToTake[GRIDWORLD_ROWS - i - 1][j][k] = FORWARD_STILL;
+					break;
+				}
+			}
+		}
+	}
+
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+			cout << values_for_states[GRIDWORLD_ROWS - i - 1][j][5] << " ";
 		}
 		cout << "\n";
 	}
+	cout << "\n";
 
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+			cout << actionsToTake[GRIDWORLD_ROWS - i - 1][j][5] << " ";
+		}
+		cout << "\n";
+	}
+	cout << "\n";
+
+	return actionsToTake;
+}
+
+void optimal_policy_iteration(double gridWorld[][GRIDWORLD_COLUMNS], double errorProbability, double discountFactor, state current, state goal) {
+
+	/*ACTIONS*** actionPolicies = get_initial_actions(goal);
+	double*** valuesForStates = evaulate_policy(gridWorld, actionPolicies, errorProbability, discountFactor);
+	cout << "The value of the trajectory at (" << current.x << "," << current.y << "," << current.clock << ") is: " << valuesForStates[current.y][current.x][current.clock] << "\n";
+	generate_and_plot(actionPolicies, current, errorProbability, goal);*/
+
+	ACTIONS*** holdPolicies = new ACTIONS**[GRIDWORLD_ROWS];
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+		holdPolicies[i] = new ACTIONS*[GRIDWORLD_COLUMNS];
+		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+			holdPolicies[i][j] = new ACTIONS[12];
+		}
+	}
+
+	ACTIONS*** actionPolicies = get_initial_actions(goal);
+	ACTIONS*** tmpPointerActions;
+	double*** valueForStates;
+	double*** tmpPointerValues;
+	bool notSame = true;
+	while (notSame == true) {
+		
+		valueForStates = evaulate_policy(gridWorld, actionPolicies, errorProbability, discountFactor);
+		
+		for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+			for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+				for (int k = 0; k < 12; k++) {
+					holdPolicies[GRIDWORLD_ROWS-i-1][j][k] = actionPolicies[GRIDWORLD_ROWS - i - 1][j][k];
+				}
+			}
+		}
+
+		tmpPointerActions = actionPolicies;
+		for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+			for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+				delete[] tmpPointerActions[i][j];
+			}
+			delete[] tmpPointerActions[i];
+		}
+		delete[] tmpPointerActions;
+
+		actionPolicies = change_policy(valueForStates, gridWorld, errorProbability, discountFactor);
+
+		bool check = false;
+		for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+			for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+				for (int k = 0; k < 12; k++) {
+					if (holdPolicies[GRIDWORLD_ROWS - i - 1][j][k] != actionPolicies[GRIDWORLD_ROWS - i - 1][j][k]) {
+						check = true;
+					}
+				}
+			}
+		}
+		notSame = check;
+
+		tmpPointerValues = valueForStates;
+		for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+			for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+				delete[] tmpPointerValues[i][j];
+			}
+			delete[] tmpPointerValues[i];
+		}
+		delete[] tmpPointerValues;
+	}
+
+	generate_and_plot(holdPolicies, current, errorProbability, goal);
 }
 
 int main(int argc, char** argv) {
@@ -757,17 +939,17 @@ int main(int argc, char** argv) {
 
 	double gridWorld[GRIDWORLD_ROWS][GRIDWORLD_COLUMNS] = 
 	{ 
-	{-100,	-100,	-100,	-100,	-100,	-100},
-	{-100,	0,		-1,		1,		-1,		-100},
-	{-100,	0,		-1,		0,		-1,		-100},
-	{-100,	0,		-1,		0,		-1,		-100},
-	{-100,	0,		0,		0,		0,		-100},
-	{-100,	-100,	-100,	-100,	-100,	-100},
+	{-100,	-100,	-100,		-100,	-100,		-100},
+	{-100,	0,		-10,		1,		-10,		-100},
+	{-100,	0,		-10,		0,		-10,		-100},
+	{-100,	0,		-10,		0,		-10,		-100},
+	{-100,	0,		0,			0,		0,			-100},
+	{-100,	-100,	-100,		-100,	-100,		-100},
 	};
 
 	state current;
-	current.x = 1;
-	current.y = 3;
+	current.x = 2;
+	current.y = 4;
 	current.clock = 6;
 
 	state goal;
@@ -775,19 +957,9 @@ int main(int argc, char** argv) {
 	goal.y = 4;
 
 	double errorProbability = 0.0;
-	double discountFactor = 0.1;
+	double discountFactor = 0.9;
 
-	//get_next_state(errorProbability,current, BACKWARD_STILL);
-	ACTIONS*** action_policies = get_initial_actions(goal.x, goal.y);
-	/*for (int i = 0; i < GRIDWORLD_ROWS; i++) {
-		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
-			cout << action_policies[GRIDWORLD_ROWS - i - 1][j][7] << " ";
-		}
-		cout << "\n";
-	}*/
-
-	evaulate_policy( gridWorld, errorProbability, discountFactor, goal.x, goal.y);
-	generate_and_plot(action_policies, current, errorProbability, goal.x, goal.y);
+	optimal_policy_iteration(gridWorld, errorProbability, discountFactor, current, goal);
 
 	return 0;
 }
