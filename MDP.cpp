@@ -949,8 +949,8 @@ int main(int argc, char** argv) {
 
 	state current;
 	current.x = 2;
-	current.y = 4;
-	current.clock = 6;
+	current.y = 2;
+	current.clock = 5;
 
 	state goal;
 	goal.x = 3;
