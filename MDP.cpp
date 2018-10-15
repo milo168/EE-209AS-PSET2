@@ -13,12 +13,14 @@ using namespace std;
 #define GRIDWORLD_ROWS 6
 #define GRIDWORLD_COLUMNS 6
 
+//state struct for the problem set
 struct state {
 	int x;
 	int y;
 	int clock;
 };
 
+//possible actions our robot can move
 enum ACTIONS {
 	STILL = 1,
 	FORWARD_STILL = 2,
@@ -29,11 +31,13 @@ enum ACTIONS {
 	BACKWARD_LEFT = 7
 };
 
+//helper function for calculating transition probability of staying still
 double still_helper(state current, state next) {
 	int changeX = next.x - current.x;
 	int changeY = next.y - current.y;
 	int changeClock = next.clock - current.clock;
 
+	//s to s' probability is 1 only if next=current
 	if (changeX == 0 && changeY == 0 && changeClock == 0) {
 		return 1.0;
 	}
@@ -42,6 +46,8 @@ double still_helper(state current, state next) {
 	
 }
 
+//helper function for calculating transition probability of moving forward or backward
+//forward and backward have the same logic but only differ by direction
 double back_forward_helper(double errorProbability, state current, state next, int direction) {
 	int changeX = next.x - current.x;
 	int changeY = next.y - current.y;
@@ -60,11 +66,15 @@ double back_forward_helper(double errorProbability, state current, state next, i
 		changeClock = -2;
 	}
 
+	//impossible to move more than one adjacent tile and change heading by 1
 	if (abs(changeX) > 1 || abs(changeY) > 1 || abs(changeClock) > 2) {
 		return 0.0;
 	}
 
+	//check if it prerotated left
 	if (changeClock == -1) {
+
+		//prerotated left at these heading causes change axis
 		if (current.clock == 2 || current.clock == 5 || current.clock == 8 || current.clock == 11) {
 			if (current.clock == 2 && changeX == 0 && changeY == 1*direction) {
 				return errorProbability;
@@ -80,6 +90,7 @@ double back_forward_helper(double errorProbability, state current, state next, i
 			}
 		}
 		else {
+			//prerotated left at these headings do not cuase change in axis
 			if ((current.clock == 3 || current.clock == 4) && changeX == 1 * direction && changeY == 0) {
 				return errorProbability;
 			}
@@ -95,6 +106,7 @@ double back_forward_helper(double errorProbability, state current, state next, i
 		}
 	}
 	else if (changeClock == 0) {
+		//prerotate did not happen
 		if ((current.clock == 2 || current.clock == 3 || current.clock == 4) && changeX == 1 * direction && changeY == 0) {
 			return 1 - 2 * errorProbability;
 		}
@@ -109,6 +121,7 @@ double back_forward_helper(double errorProbability, state current, state next, i
 		}
 	}
 	else if (changeClock == 1) {
+		//prerotate right at these headings causes change in axis
 		if (current.clock == 1 || current.clock == 4 || current.clock == 7 || current.clock == 10) {
 			if (current.clock == 1 && changeX == 1 * direction && changeY == 0) {
 				return errorProbability;
@@ -124,6 +137,7 @@ double back_forward_helper(double errorProbability, state current, state next, i
 			}
 		}
 		else {
+			//prerotate right at these headings does not cause change in axis
 			if ((current.clock == 11 || current.clock == 0) && changeX == 0 && changeY == 1 * direction) {
 				return errorProbability;
 			}
@@ -141,6 +155,8 @@ double back_forward_helper(double errorProbability, state current, state next, i
 	return 0.0;
 }
 
+//helper function for calculating transition probability of moving forward then left or backward then left
+//forward then left and backward then left have the same logic but only differ by direction
 double back_forward_left_helper(double errorProbability, state current, state next, int direction) {
 	int changeX = next.x - current.x;
 	int changeY = next.y - current.y;
@@ -159,11 +175,14 @@ double back_forward_left_helper(double errorProbability, state current, state ne
 		changeClock = -2;
 	}
 
+	//impossible to move more than one adjacent tile and change heading by 1
 	if (abs(changeX) > 1 || abs(changeY) > 1 || abs(changeClock) > 2) {
 		return 0.0;
 	}
 	
+	//if prerotate causes a total change of heading of 2
 	if (changeClock == -2) {
+		//at these headings the axis changes
 		if (current.clock == 4 || current.clock == 7 || current.clock == 10 || current.clock == 1 || 
 			current.clock == 3 || current.clock == 6 || current.clock == 9 || current.clock == 0) {
 			if ((current.clock == 3 || current.clock == 4) && changeX == 1 * direction && changeY == 0) {
@@ -180,6 +199,7 @@ double back_forward_left_helper(double errorProbability, state current, state ne
 			}
 		}
 		else {
+			//otherwise the axis is still same
 			if (current.clock == 2 && changeX == 0 && changeY == 1 * direction) {
 				return errorProbability;
 			}
@@ -195,6 +215,7 @@ double back_forward_left_helper(double errorProbability, state current, state ne
 		}
 	}
 	else if (changeClock == -1) {
+		//no prerotation error
 		if ((current.clock == 2 || current.clock == 3 || current.clock == 4) && changeX == 1 * direction && changeY == 0) {
 			return 1 - 2 * errorProbability;
 		}
@@ -209,6 +230,8 @@ double back_forward_left_helper(double errorProbability, state current, state ne
 		}
 	}
 	else if (changeClock == 0) {
+		//prerotated right but then turned left after action
+		//at these headings the axis changes
 		if (current.clock == 1 || current.clock == 4 || current.clock == 7 || current.clock == 10) {
 			if (current.clock == 1 && changeX == 1 * direction && changeY == 0) {
 				return errorProbability;
@@ -224,6 +247,7 @@ double back_forward_left_helper(double errorProbability, state current, state ne
 			}
 		}
 		else {
+			//at these headings axis does not change
 			if ((current.clock == 11 || current.clock == 0) && changeX == 0 && changeY == 1 * direction) {
 				return errorProbability;
 			}
@@ -240,7 +264,8 @@ double back_forward_left_helper(double errorProbability, state current, state ne
 	}
 	return 0.0;
 }
-
+//helper function for calculating transition probability of moving forward then right or backward then right
+//forward then right and backward then right have the same logic but only differ by direction
 double back_forward_right_helper(double errorProbability, state current, state next, int direction) {
 	int changeX = next.x - current.x;
 	int changeY = next.y - current.y;
@@ -259,11 +284,14 @@ double back_forward_right_helper(double errorProbability, state current, state n
 		changeClock = -2;
 	}
 
+	//impossible to move more than one adjacent tile and change heading by 1
 	if (abs(changeX) > 1 || abs(changeY) > 1 || abs(changeClock) > 2) {
 		return 0.0;
 	}
 
+	//if prerotate cuases a change of heading by 2
 	if (changeClock == 2) {
+		//at these headings the axis changes
 		if (current.clock == 2 || current.clock == 5 || current.clock == 8 || current.clock == 11 ||
 			current.clock == 3 || current.clock == 6 || current.clock == 9 || current.clock == 0) {
 			if ((current.clock == 2 || current.clock == 3) && changeX == 1 * direction && changeY == 0) {
@@ -280,6 +308,7 @@ double back_forward_right_helper(double errorProbability, state current, state n
 			}
 		}
 		else {
+			//at these headings the axis does not change
 			if (current.clock == 4 && changeX == 0 && changeY == -1 * direction) {
 				return errorProbability;
 			}
@@ -295,6 +324,7 @@ double back_forward_right_helper(double errorProbability, state current, state n
 		}
 	}
 	else if (changeClock == 1) {
+		//no prerotation error
 		if ((current.clock == 5 || current.clock == 6 || current.clock == 7) && changeX == 0 && changeY == -1 * direction) {
 			return 1 - 2 * errorProbability;
 		}
@@ -309,6 +339,8 @@ double back_forward_right_helper(double errorProbability, state current, state n
 		}
 	}
 	else if (changeClock == 0) {
+		//prerotated left but then rotated right after movement
+		//at these headings the axis changes
 		if (current.clock == 11 || current.clock == 8 || current.clock == 5 || current.clock == 2) {
 			if (current.clock == 11 && changeX == -1 * direction && changeY == 0) {
 				return errorProbability;
@@ -324,6 +356,7 @@ double back_forward_right_helper(double errorProbability, state current, state n
 			}
 		}
 		else {
+			//at these headings the axis does not change
 			if ((current.clock == 0 || current.clock == 1) && changeX == 0 && changeY == 1 * direction) {
 				return errorProbability;
 			}
@@ -341,6 +374,7 @@ double back_forward_right_helper(double errorProbability, state current, state n
 	return 0.0;
 }
 
+//calculate transition probability to get to s' from s given some action
 double transition_probability(double errorProbability, state current, state next, ACTIONS action) {
 	switch (action) {
 	case STILL:
@@ -363,6 +397,7 @@ double transition_probability(double errorProbability, state current, state next
 
 }
 
+//find the next state
 state get_next_state(double errorProbability, state current, ACTIONS action) {
 	int chance = (int)(100.0 * rand() / (RAND_MAX + 1.0)) + 1;
 	vector<pair<state, double>> possibleStates;
@@ -451,21 +486,29 @@ state get_next_state(double errorProbability, state current, ACTIONS action) {
 	return next;
 }
 
-double get_reward(double gridWorld[GRIDWORLD_ROWS][GRIDWORLD_COLUMNS], state current) {
-	return gridWorld[GRIDWORLD_ROWS-current.y-1][current.x];
+//returns the reward
+double get_reward(double gridWorld[GRIDWORLD_ROWS][GRIDWORLD_COLUMNS][12], state current) {
+	return gridWorld[GRIDWORLD_ROWS-current.y-1][current.x][current.clock];
 }
 
+//used for initial policy
 ACTIONS get_action(state current, int goalX, int goalY) {
 	//For h in +/- x
+	//check which way the robot is facing
 	if (current.clock == 2 || current.clock == 3 || current.clock == 4 ||
 		current.clock == 8 || current.clock == 9 || current.clock == 10) {
+		//if the robot is not immediate above/under the goal
 		if (abs(goalX - current.x) != 0) {
+			//if the robot are at these headings and orientation to the goal...
+			//corresponds to right of the goal and left of the goal
 			if ((goalX < current.x && (current.clock == 2 || current.clock == 3 || current.clock == 4)) ||
 				(goalX > current.x && (current.clock == 8 || current.clock == 9 || current.clock == 10))) {
+				//if it is immediate to left/right of goal
 				if (goalY - current.y == 0) {
 					return BACKWARD_STILL;
 				}
 				else {
+					//try to get immediate above/under to the goal
 					if (current.clock == 2 || current.clock == 8) {
 						return BACKWARD_LEFT;
 					}
@@ -475,6 +518,7 @@ ACTIONS get_action(state current, int goalX, int goalY) {
 				}
 			}
 			else {
+				//same as above
 				if (goalY - current.y == 0) {
 					return FORWARD_STILL;
 				}
@@ -489,13 +533,18 @@ ACTIONS get_action(state current, int goalX, int goalY) {
 			}
 		}
 		else {
+			//if robot is at boundary and directly under goal
 			if (current.x == 0 || current.x == GRIDWORLD_COLUMNS - 1) {
+				//check boundary and heading
 				if ((current.x == 0 && (current.clock == 2 || current.clock == 3 || current.clock == 4)) ||
 					(current.x == GRIDWORLD_COLUMNS - 1 && (current.clock == 8 || current.clock == 9 || current.clock == 10))) {
+
+					//this means goal is at boundary
 					if (goalY - current.y == 0) {
 						return STILL;
 					}
 					else {
+						//drive into wall and try to orientate to face goal
 						if (current.clock == 2 || current.clock == 8) {
 							return BACKWARD_LEFT;
 						}
@@ -505,10 +554,12 @@ ACTIONS get_action(state current, int goalX, int goalY) {
 					}
 				}
 				else {
+					//goal at boundary
 					if (goalY - current.y == 0) {
 						return STILL;
 					}
 					else {
+						//move along the wall
 						if (current.clock == 2 || current.clock == 8) {
 							return FORWARD_LEFT;
 						}
@@ -519,10 +570,12 @@ ACTIONS get_action(state current, int goalX, int goalY) {
 				}
 			}
 			else {
+				//goal is not at boundary and robot is at goal
 				if (goalY - current.y == 0) {
 					return STILL;
 				}
 				else {
+					//try to get to same y
 					if (current.clock == 2 || current.clock == 8) {
 						return FORWARD_LEFT;
 					}
@@ -535,6 +588,8 @@ ACTIONS get_action(state current, int goalX, int goalY) {
 	}
 
 	//For h in +/- y
+	//see above function for explanation
+	//this is a mirror but with changes for y
 	if (current.clock == 11 || current.clock == 0 || current.clock == 1 ||
 		current.clock == 5 || current.clock == 6 || current.clock == 7) {
 		if (abs(goalY - current.y) != 0) {
@@ -611,10 +666,9 @@ ACTIONS get_action(state current, int goalX, int goalY) {
 			}
 		}
 	}
-
-	
 }
 
+//generates initial actions for all states
 ACTIONS*** get_initial_actions(state goal) {
 	ACTIONS*** actionPolicies = new ACTIONS**[GRIDWORLD_ROWS];
 	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
@@ -638,6 +692,7 @@ ACTIONS*** get_initial_actions(state goal) {
 	return actionPolicies;
 }
 
+//printing for robot trajectory it takes for some policy, initial state, and goal
 void generate_and_plot(ACTIONS*** action_policies, state initial, double errorProbability, state goal) {
 	int MAX_STEPS = GRIDWORLD_ROWS * GRIDWORLD_COLUMNS * 12 * 100;
 	int count = 0;
@@ -678,7 +733,8 @@ void generate_and_plot(ACTIONS*** action_policies, state initial, double errorPr
 	delete[] gridPrint;
 }
 
-double*** evaulate_policy(double gridWorld[][GRIDWORLD_COLUMNS], ACTIONS*** actionPolicies, double errorProbability, double discountFactor) {
+//policy evaluation
+double*** evaulate_policy(double gridWorld[][GRIDWORLD_COLUMNS][12], ACTIONS*** actionPolicies, double errorProbability, double discountFactor) {
 
 	double*** values_for_states = new double**[GRIDWORLD_ROWS];
 	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
@@ -702,6 +758,9 @@ double*** evaulate_policy(double gridWorld[][GRIDWORLD_COLUMNS], ACTIONS*** acti
 		}
 	}
 
+	//for all states get the total value from going at some current state to all s' next states
+	//most will be 0 because of transition probability
+	//stop only if none of the values go above some delta
 	while (true) {
 		double delta = 0;
 		for (int i = 0; i < GRIDWORLD_ROWS; i++) {
@@ -757,6 +816,7 @@ double*** evaulate_policy(double gridWorld[][GRIDWORLD_COLUMNS], ACTIONS*** acti
 		}
 		cout << "\n";
 	}*/
+	cout << values_for_states2[GRIDWORLD_ROWS - 4 - 1][1][6] << "\n";
 
 	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
 		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
@@ -769,7 +829,8 @@ double*** evaulate_policy(double gridWorld[][GRIDWORLD_COLUMNS], ACTIONS*** acti
 	return values_for_states2;
 }
 
-ACTIONS*** change_policy(double*** values_for_states, double gridWorld[][GRIDWORLD_COLUMNS], double errorProbability, double discountFactor) {
+//for part of finding optimal policy
+ACTIONS*** change_policy(double*** values_for_states, double gridWorld[][GRIDWORLD_COLUMNS][12], double errorProbability, double discountFactor) {
 	ACTIONS*** actionsToTake = new ACTIONS**[GRIDWORLD_ROWS];
 	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
 		actionsToTake[i] = new ACTIONS*[GRIDWORLD_COLUMNS];
@@ -777,7 +838,8 @@ ACTIONS*** change_policy(double*** values_for_states, double gridWorld[][GRIDWOR
 			actionsToTake[i][j] = new ACTIONS[12];
 		}
 	}
-
+	//for each current state, get the action that maximizes your reward to get to all possible next states
+	//most will be 0 because of transition probability
 	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
 		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
 			for (int k = 0; k < 12; k++) {
@@ -847,7 +909,7 @@ ACTIONS*** change_policy(double*** values_for_states, double gridWorld[][GRIDWOR
 		}
 	}
 
-	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+	/*for (int i = 0; i < GRIDWORLD_ROWS; i++) {
 		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
 			cout << values_for_states[GRIDWORLD_ROWS - i - 1][j][5] << " ";
 		}
@@ -861,12 +923,13 @@ ACTIONS*** change_policy(double*** values_for_states, double gridWorld[][GRIDWOR
 		}
 		cout << "\n";
 	}
-	cout << "\n";
+	cout << "\n";*/
 
 	return actionsToTake;
 }
 
-void optimal_policy_iteration(double gridWorld[][GRIDWORLD_COLUMNS], double errorProbability, double discountFactor, state current, state goal) {
+//policy iteration
+void optimal_policy_iteration(double gridWorld[][GRIDWORLD_COLUMNS][12], double errorProbability, double discountFactor, state current, state goal) {
 
 	/*ACTIONS*** actionPolicies = get_initial_actions(goal);
 	double*** valuesForStates = evaulate_policy(gridWorld, actionPolicies, errorProbability, discountFactor);
@@ -886,6 +949,11 @@ void optimal_policy_iteration(double gridWorld[][GRIDWORLD_COLUMNS], double erro
 	double*** valueForStates;
 	double*** tmpPointerValues;
 	bool notSame = true;
+
+	//evaluate the policy by calculating the values at each state
+	//so call evaluate_policy
+	//then generate a new set of policies by passing the values from the old policies
+	//stop until policies do not change at any of the states
 	while (notSame == true) {
 		
 		valueForStates = evaulate_policy(gridWorld, actionPolicies, errorProbability, discountFactor);
@@ -921,7 +989,189 @@ void optimal_policy_iteration(double gridWorld[][GRIDWORLD_COLUMNS], double erro
 		}
 		notSame = check;
 
-		tmpPointerValues = valueForStates;
+		if (check != false) {
+			tmpPointerValues = valueForStates;
+			for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+				for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+					delete[] tmpPointerValues[i][j];
+				}
+				delete[] tmpPointerValues[i];
+			}
+			delete[] tmpPointerValues;
+		}
+	}
+
+	generate_and_plot(holdPolicies, current, errorProbability, goal);
+	cout << valueForStates[GRIDWORLD_ROWS - 4 - 1][1][6] << "\n";
+
+	tmpPointerValues = valueForStates;
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+			delete[] tmpPointerValues[i][j];
+		}
+		delete[] tmpPointerValues[i];
+	}
+	delete[] tmpPointerValues;
+
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+			delete[] holdPolicies[i][j];
+		}
+		delete[] holdPolicies[i];
+	}
+	delete[] holdPolicies;
+}
+
+//for value iteration
+double*** change_values(ACTIONS*** actionsToTake, double*** oldValuesForStates, double gridWorld[][GRIDWORLD_COLUMNS][12], double errorProbability, double discountFactor) {
+	double*** valuesForStates = new double**[GRIDWORLD_ROWS];
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+		valuesForStates[i] = new double*[GRIDWORLD_COLUMNS];
+		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+			valuesForStates[i][j] = new double[12];
+			for (int k = 0; k < 12; k++) {
+				valuesForStates[i][j][k] = 0;
+			}
+		}
+	}
+
+	//find the action that maximizes the value at current state for all possible s' next states
+	//store those action too for optimal policy
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+			for (int k = 0; k < 12; k++) {
+				state current;
+				current.y = GRIDWORLD_ROWS - i - 1;
+				current.x = j;
+				current.clock = k;
+
+				double checkActions[7] = { 0.0 };
+				for (int a = 0; a < GRIDWORLD_ROWS; a++) {
+					for (int b = 0; b < GRIDWORLD_COLUMNS; b++) {
+						for (int c = 0; c < 12; c++) {
+							state next;
+							next.y = GRIDWORLD_ROWS - a - 1;
+							next.x = b;
+							next.clock = c;
+
+							checkActions[0] += transition_probability(errorProbability, current, next, STILL) *
+								(get_reward(gridWorld, current) + discountFactor * oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
+							checkActions[1] += transition_probability(errorProbability, current, next, BACKWARD_LEFT) *
+								(get_reward(gridWorld, current) + discountFactor * oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
+							checkActions[2] += transition_probability(errorProbability, current, next, BACKWARD_RIGHT) *
+								(get_reward(gridWorld, current) + discountFactor * oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
+							checkActions[3] += transition_probability(errorProbability, current, next, FORWARD_LEFT) *
+								(get_reward(gridWorld, current) + discountFactor * oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
+							checkActions[4] += transition_probability(errorProbability, current, next, FORWARD_RIGHT) *
+								(get_reward(gridWorld, current) + discountFactor * oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
+							checkActions[5] += transition_probability(errorProbability, current, next, BACKWARD_STILL) *
+								(get_reward(gridWorld, current) + discountFactor * oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
+							checkActions[6] += transition_probability(errorProbability, current, next, FORWARD_STILL) *
+								(get_reward(gridWorld, current) + discountFactor * oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
+						}
+					}
+				}
+				double val = checkActions[0];
+				int index = 0;
+				for (int i = 0; i < 7; i++) {
+					if (val < checkActions[i]) {
+						index = i;
+						val = checkActions[i];
+					}
+				}
+
+				valuesForStates[GRIDWORLD_ROWS - i - 1][j][k] += val;
+
+				switch (index) {
+				case 0:
+					actionsToTake[GRIDWORLD_ROWS - i - 1][j][k] = STILL;
+					break;
+				case 1:
+					actionsToTake[GRIDWORLD_ROWS - i - 1][j][k] = BACKWARD_LEFT;
+					break;
+				case 2:
+					actionsToTake[GRIDWORLD_ROWS - i - 1][j][k] = BACKWARD_RIGHT;
+					break;
+				case 3:
+					actionsToTake[GRIDWORLD_ROWS - i - 1][j][k] = FORWARD_LEFT;
+					break;
+				case 4:
+					actionsToTake[GRIDWORLD_ROWS - i - 1][j][k] = FORWARD_RIGHT;
+					break;
+				case 5:
+					actionsToTake[GRIDWORLD_ROWS - i - 1][j][k] = BACKWARD_STILL;
+					break;
+				case 6:
+					actionsToTake[GRIDWORLD_ROWS - i - 1][j][k] = FORWARD_STILL;
+					break;
+				}
+			}
+		}
+	}
+
+	/*for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+	for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+	cout << valuesForStates[GRIDWORLD_ROWS - i - 1][j][5] << " ";
+	}
+	cout << "\n";
+	}
+	cout << "\n";
+
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+	for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+	cout << actionsToTake[GRIDWORLD_ROWS - i - 1][j][5] << " ";
+	}
+	cout << "\n";
+	}
+	cout << "\n";*/
+
+	return valuesForStates;
+}
+
+//value iteration
+void optimal_value_iteration(double gridWorld[][GRIDWORLD_COLUMNS][12], double errorProbability, double discountFactor, state current, state goal) {
+	ACTIONS*** holdPolicies = new ACTIONS**[GRIDWORLD_ROWS];
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+		holdPolicies[i] = new ACTIONS*[GRIDWORLD_COLUMNS];
+		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+			holdPolicies[i][j] = new ACTIONS[12];
+		}
+	}
+
+	double*** holdValues = new double**[GRIDWORLD_ROWS];
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+		holdValues[i] = new double*[GRIDWORLD_COLUMNS];
+		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+			holdValues[i][j] = new double[12];
+			for (int k = 0; k < 12; k++) {
+				holdValues[i][j][k] = 0;
+			}
+		}
+	}
+
+	double*** valueForStates;
+	double*** tmpPointerValues;
+	bool notSame = true;
+
+	//maximize values for each state
+	//stop until values for any state do not go pass some delta
+	while (notSame == true) {
+
+		valueForStates = change_values(holdPolicies, holdValues, gridWorld, errorProbability, discountFactor);
+
+		bool check = false;
+		for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+			for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+				for (int k = 0; k < 12; k++) {
+					if (abs(valueForStates[GRIDWORLD_ROWS - i - 1][j][k] - holdValues[GRIDWORLD_ROWS - i - 1][j][k]) > 0.01) {
+						check = true;
+					}
+				}
+			}
+		}
+		notSame = check;
+
+		tmpPointerValues = holdValues;
 		for (int i = 0; i < GRIDWORLD_ROWS; i++) {
 			for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
 				delete[] tmpPointerValues[i][j];
@@ -929,28 +1179,88 @@ void optimal_policy_iteration(double gridWorld[][GRIDWORLD_COLUMNS], double erro
 			delete[] tmpPointerValues[i];
 		}
 		delete[] tmpPointerValues;
+		holdValues = valueForStates;
 	}
 
+	
 	generate_and_plot(holdPolicies, current, errorProbability, goal);
+	cout << valueForStates[GRIDWORLD_ROWS - 4 - 1][1][6] << "\n";
+
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+			delete[] holdPolicies[i][j];
+		}
+		delete[] holdPolicies[i];
+	}
+	delete[] holdPolicies;
 }
 
+//testing part goes here
 int main(int argc, char** argv) {
 	srand(time(NULL));
-
-	double gridWorld[GRIDWORLD_ROWS][GRIDWORLD_COLUMNS] = 
-	{ 
+	
+	double gridWorld[GRIDWORLD_ROWS][GRIDWORLD_COLUMNS][12];
+	/*{ 
 	{-100,	-100,	-100,		-100,	-100,		-100},
 	{-100,	0,		-10,		1,		-10,		-100},
 	{-100,	0,		-10,		0,		-10,		-100},
 	{-100,	0,		-10,		0,		-10,		-100},
 	{-100,	0,		0,			0,		0,			-100},
 	{-100,	-100,	-100,		-100,	-100,		-100},
-	};
+	};*/
+
+	for (int k = 0; k < 12; k++) {
+		gridWorld[0][0][k] = -100;
+		gridWorld[0][1][k] = -100;
+		gridWorld[0][2][k] = -100;
+		gridWorld[0][3][k] = -100;
+		gridWorld[0][4][k] = -100;
+		gridWorld[0][5][k] = -100;
+
+		gridWorld[1][0][k] = -100;
+		gridWorld[1][1][k] = 0;
+		gridWorld[1][2][k] = -10;
+		gridWorld[1][3][k] =  1;
+		gridWorld[1][4][k] = -10;
+		gridWorld[1][5][k] = -100;
+
+		gridWorld[2][0][k] = -100;
+		gridWorld[2][1][k] = 0;
+		gridWorld[2][2][k] = -10;
+		gridWorld[2][3][k] = 0;
+		gridWorld[2][4][k] = -10;
+		gridWorld[2][5][k] = -100;
+
+		gridWorld[3][0][k] = -100;
+		gridWorld[3][1][k] = 0;
+		gridWorld[3][2][k] = -10;
+		gridWorld[3][3][k] = 0;
+		gridWorld[3][4][k] = -10;
+		gridWorld[3][5][k] = -100;
+
+		gridWorld[4][0][k] = -100;
+		gridWorld[4][1][k] = 0;
+		gridWorld[4][2][k] = 0;
+		gridWorld[4][3][k] = 0;
+		gridWorld[4][4][k] = 0;
+		gridWorld[4][5][k] = -100;
+
+		gridWorld[5][0][k] = -100;
+		gridWorld[5][1][k] = -100;
+		gridWorld[5][2][k] = -100;
+		gridWorld[5][3][k] = -100;
+		gridWorld[5][4][k] = -100;
+		gridWorld[5][5][k] = -100;
+	}
+
+	//gridWorld[1][3][5] = 1;
+	//gridWorld[1][3][6] = 1;
+	//gridWorld[1][3][7] = 1;
 
 	state current;
-	current.x = 2;
-	current.y = 2;
-	current.clock = 5;
+	current.x = 1;
+	current.y = 4;
+	current.clock = 6;
 
 	state goal;
 	goal.x = 3;
@@ -959,7 +1269,21 @@ int main(int argc, char** argv) {
 	double errorProbability = 0.0;
 	double discountFactor = 0.9;
 
-	optimal_policy_iteration(gridWorld, errorProbability, discountFactor, current, goal);
+	ACTIONS*** actionPolicies = get_initial_actions(goal);
+	generate_and_plot(actionPolicies, current, errorProbability, goal);
 
+	chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
+	optimal_policy_iteration(gridWorld, errorProbability, discountFactor, current, goal);
+	chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
+
+	chrono::duration<double> timeSpan = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
+	cout << "Time it took to execute policy iteration in seconds: " << timeSpan.count() << "\n";
+
+	t1 = chrono::high_resolution_clock::now();
+	optimal_value_iteration(gridWorld, errorProbability, discountFactor, current, goal);
+	t2 = chrono::high_resolution_clock::now();
+
+	timeSpan = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
+	cout << "Time it took to execute value iteration in seconds: " << timeSpan.count() << "\n";
 	return 0;
 }
