@@ -73,7 +73,6 @@ double back_forward_helper(double errorProbability, state current, state next, i
 
 	//check if it prerotated left
 	if (changeClock == -1) {
-
 		//prerotated left at these heading causes change axis
 		if (current.clock == 2 || current.clock == 5 || current.clock == 8 || current.clock == 11) {
 			if (current.clock == 2 && changeX == 0 && changeY == 1*direction) {
@@ -374,6 +373,7 @@ double back_forward_right_helper(double errorProbability, state current, state n
 	return 0.0;
 }
 
+
 //calculate transition probability to get to s' from s given some action
 double transition_probability(double errorProbability, state current, state next, ACTIONS action) {
 	switch (action) {
@@ -439,11 +439,21 @@ state get_next_state(double errorProbability, state current, ACTIONS action) {
 		possibleStates.push_back(make_pair(next, transition_probability(errorProbability, current, next, action)));
 	}
 	//for (int i = 0; i < possibleStates.size(); i++) {
-	//	cout << possibleStates[i].first.x << " " << possibleStates[i].first.y << " " << possibleStates[i].first.clock << " " << possibleStates[i].second << "\n";
+	//	cout << possibleStates[i].first.x << " " << possibleStates[i].first.y << " " << possibleStates[i].first.clock << " " << possibleStates[i].second << " " << action << "\n";
 	//}
+	//cout << "\n\n";
 
 	//GENERATE THE NEXT STATE
 	state next;
+	if (action == STILL) {
+		for (int i = 0; i < possibleStates.size(); i++) {
+			if (possibleStates[i].second == 1) {
+				next = possibleStates[i].first;
+				break;
+			}
+		}
+	}
+	
 	if (chance <= (1 - 2 * errorProbability)*100) {
 		for (int i = 0; i < possibleStates.size(); i++) {
 			if (possibleStates[i].second == 1 - 2 * errorProbability) {
@@ -694,17 +704,20 @@ ACTIONS*** get_initial_actions(state goal) {
 
 //printing for robot trajectory it takes for some policy, initial state, and goal
 void generate_and_plot(ACTIONS*** action_policies, state initial, double errorProbability, state goal) {
-	int MAX_STEPS = GRIDWORLD_ROWS * GRIDWORLD_COLUMNS * 12 * 100;
+	int MAX_STEPS = GRIDWORLD_ROWS * GRIDWORLD_COLUMNS * 12 * 1000000;
 	int count = 0;
 	state generated = initial;
 	vector<state> history;
 
 	history.push_back(generated);
-	while ((generated.x != goal.x || generated.y != goal.y) && count < MAX_STEPS) {
+	//while ((generated.x != goal.x || generated.y != goal.y) && count < MAX_STEPS) {
+	while (action_policies[generated.y][generated.x][generated.clock] != STILL && count < MAX_STEPS){
 		generated = get_next_state(errorProbability, generated, action_policies[generated.y][generated.x][generated.clock]);
 		history.push_back(generated);
 		count++;
 	}
+	//generated = get_next_state(errorProbability, generated, action_policies[generated.y][generated.x][generated.clock]);
+	//cout << "AFTER FINDING STILL STATE: " << generated.x << " " << generated.y <<  " " << generated.clock << "\n";
 
 	char** gridPrint = new char*[GRIDWORLD_ROWS];
 	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
@@ -773,16 +786,46 @@ double*** evaulate_policy(double gridWorld[][GRIDWORLD_COLUMNS][12], ACTIONS*** 
 					current.x = j;
 					current.clock = k;
 
-					for (int a = 0; a < GRIDWORLD_ROWS; a++) {
-						for (int b = 0; b < GRIDWORLD_COLUMNS; b++) {
+					for (int a = -1; a < GRIDWORLD_ROWS+1; a++) {
+						for (int b = -1; b < GRIDWORLD_COLUMNS+1; b++) {
 							for (int c = 0; c < 12; c++) {
 								state next;
 								next.y = GRIDWORLD_ROWS - a - 1;
 								next.x = b;
 								next.clock = c;
 
-								values_for_states[GRIDWORLD_ROWS-i-1][j][k] += transition_probability(errorProbability, current, next, actionPolicies[current.y][current.x][current.clock]) *
-									(get_reward(gridWorld, current) + discountFactor * values_for_states2[GRIDWORLD_ROWS-a-1][b][c]);
+								if (a == -1 && b == -1) {
+									continue;
+								}
+								else if (a == -1 && b == GRIDWORLD_COLUMNS) {
+									continue;
+								}
+								else if (a == GRIDWORLD_ROWS && b == -1) {
+									continue;
+								}
+								else if (a == GRIDWORLD_ROWS && b == GRIDWORLD_COLUMNS) {
+									continue;
+								}
+
+								double adjustedOffset = 0;
+								//top row
+								if (b > -1  && b < GRIDWORLD_COLUMNS && a == -1) {
+									adjustedOffset = values_for_states2[GRIDWORLD_ROWS - 1][b][c];
+								}//bottom row
+								else if (b > -1 && b < GRIDWORLD_COLUMNS && a == GRIDWORLD_ROWS) {
+									adjustedOffset = values_for_states2[0][b][c];
+								}//side left
+								else if (a > -1 && a < GRIDWORLD_ROWS && b == -1) {
+									adjustedOffset = values_for_states2[GRIDWORLD_ROWS - a - 1][b + 1][c];
+								}//side right
+								else if (a > -1 && a < GRIDWORLD_ROWS && b == GRIDWORLD_COLUMNS) {
+									adjustedOffset = values_for_states2[GRIDWORLD_ROWS - a - 1][b - 1][c];
+								}//normal case
+								else {
+									adjustedOffset = values_for_states2[GRIDWORLD_ROWS - a - 1][b][c];
+								}
+								values_for_states[GRIDWORLD_ROWS - i - 1][j][k] += transition_probability(errorProbability, current, next, actionPolicies[current.y][current.x][current.clock]) *
+									(get_reward(gridWorld, current) + discountFactor * adjustedOffset);// values_for_states2[GRIDWORLD_ROWS - a - 1][b][c]);
 							}
 						}
 					}
@@ -849,28 +892,59 @@ ACTIONS*** change_policy(double*** values_for_states, double gridWorld[][GRIDWOR
 				current.clock = k;
 
 				double checkActions[7] = { 0.0 };
-				for (int a = 0; a < GRIDWORLD_ROWS; a++) {
-					for (int b = 0; b < GRIDWORLD_COLUMNS; b++) {
+				for (int a = -1; a < GRIDWORLD_ROWS+1; a++) {
+					for (int b = -1; b < GRIDWORLD_COLUMNS+1; b++) {
 						for (int c = 0; c < 12; c++) {
 							state next;
 							next.y = GRIDWORLD_ROWS - a - 1;
 							next.x = b;
 							next.clock = c;
 
+							if (a == -1 && b == -1) {
+								continue;
+							}
+							else if (a == -1 && b == GRIDWORLD_COLUMNS) {
+								continue;
+							}
+							else if (a == GRIDWORLD_ROWS && b == -1) {
+								continue;
+							}
+							else if (a == GRIDWORLD_ROWS && b == GRIDWORLD_COLUMNS) {
+								continue;
+							}
+
+							double adjustedOffset = 0;
+							//top row
+							if (b > -1 && b < GRIDWORLD_COLUMNS && a == -1) {
+								adjustedOffset = values_for_states[GRIDWORLD_ROWS - 1][b][c];
+							}//bottom row
+							else if (b > -1 && b < GRIDWORLD_COLUMNS && a == GRIDWORLD_ROWS) {
+								adjustedOffset = values_for_states[0][b][c];
+							}//side left
+							else if (a > -1 && a < GRIDWORLD_ROWS && b == -1) {
+								adjustedOffset = values_for_states[GRIDWORLD_ROWS - a - 1][b + 1][c];
+							}//side right
+							else if (a > -1 && a < GRIDWORLD_ROWS && b == GRIDWORLD_COLUMNS) {
+								adjustedOffset = values_for_states[GRIDWORLD_ROWS - a - 1][b - 1][c];
+							}//normal case
+							else {
+								adjustedOffset = values_for_states[GRIDWORLD_ROWS - a - 1][b][c];
+							}
+
 							checkActions[0] += transition_probability(errorProbability, current, next, STILL) *
-								(get_reward(gridWorld, current) + discountFactor * values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
+								(get_reward(gridWorld, current) + discountFactor * adjustedOffset);// values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
 							checkActions[1] += transition_probability(errorProbability, current, next, BACKWARD_LEFT) *
-								(get_reward(gridWorld, current) + discountFactor * values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
+								(get_reward(gridWorld, current) + discountFactor * adjustedOffset);//values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
 							checkActions[2] += transition_probability(errorProbability, current, next, BACKWARD_RIGHT) *
-								(get_reward(gridWorld, current) + discountFactor * values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
+								(get_reward(gridWorld, current) + discountFactor * adjustedOffset);//values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
 							checkActions[3] += transition_probability(errorProbability, current, next, FORWARD_LEFT) *
-								(get_reward(gridWorld, current) + discountFactor * values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
+								(get_reward(gridWorld, current) + discountFactor * adjustedOffset);//values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
 							checkActions[4] += transition_probability(errorProbability, current, next, FORWARD_RIGHT) *
-								(get_reward(gridWorld, current) + discountFactor * values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
+								(get_reward(gridWorld, current) + discountFactor * adjustedOffset);//values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
 							checkActions[5] += transition_probability(errorProbability, current, next, BACKWARD_STILL) *
-								(get_reward(gridWorld, current) + discountFactor * values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
+								(get_reward(gridWorld, current) + discountFactor * adjustedOffset);//values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
 							checkActions[6] += transition_probability(errorProbability, current, next, FORWARD_STILL) *
-								(get_reward(gridWorld, current) + discountFactor * values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
+								(get_reward(gridWorld, current) + discountFactor * adjustedOffset);//values_for_states[GRIDWORLD_ROWS - a - 1][b][c]);
 						}
 					}
 				}
@@ -1046,28 +1120,59 @@ double*** change_values(ACTIONS*** actionsToTake, double*** oldValuesForStates, 
 				current.clock = k;
 
 				double checkActions[7] = { 0.0 };
-				for (int a = 0; a < GRIDWORLD_ROWS; a++) {
-					for (int b = 0; b < GRIDWORLD_COLUMNS; b++) {
+				for (int a = -1; a < GRIDWORLD_ROWS+1; a++) {
+					for (int b = -1; b < GRIDWORLD_COLUMNS+1; b++) {
 						for (int c = 0; c < 12; c++) {
 							state next;
 							next.y = GRIDWORLD_ROWS - a - 1;
 							next.x = b;
 							next.clock = c;
 
+							if (a == -1 && b == -1) {
+								continue;
+							}
+							else if (a == -1 && b == GRIDWORLD_COLUMNS) {
+								continue;
+							}
+							else if (a == GRIDWORLD_ROWS && b == -1) {
+								continue;
+							}
+							else if (a == GRIDWORLD_ROWS && b == GRIDWORLD_COLUMNS) {
+								continue;
+							}
+
+							double adjustedOffset = 0;
+							//top row
+							if (b > -1 && b < GRIDWORLD_COLUMNS && a == -1) {
+								adjustedOffset = oldValuesForStates[GRIDWORLD_ROWS - 1][b][c];
+							}//bottom row
+							else if (b > -1 && b < GRIDWORLD_COLUMNS && a == GRIDWORLD_ROWS) {
+								adjustedOffset = oldValuesForStates[0][b][c];
+							}//side left
+							else if (a > -1 && a < GRIDWORLD_ROWS && b == -1) {
+								adjustedOffset = oldValuesForStates[GRIDWORLD_ROWS - a - 1][b + 1][c];
+							}//side right
+							else if (a > -1 && a < GRIDWORLD_ROWS && b == GRIDWORLD_COLUMNS) {
+								adjustedOffset = oldValuesForStates[GRIDWORLD_ROWS - a - 1][b - 1][c];
+							}//normal case
+							else {
+								adjustedOffset = oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c];
+							}
+
 							checkActions[0] += transition_probability(errorProbability, current, next, STILL) *
-								(get_reward(gridWorld, current) + discountFactor * oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
+								(get_reward(gridWorld, current) + discountFactor * adjustedOffset);//oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
 							checkActions[1] += transition_probability(errorProbability, current, next, BACKWARD_LEFT) *
-								(get_reward(gridWorld, current) + discountFactor * oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
+								(get_reward(gridWorld, current) + discountFactor * adjustedOffset);//oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
 							checkActions[2] += transition_probability(errorProbability, current, next, BACKWARD_RIGHT) *
-								(get_reward(gridWorld, current) + discountFactor * oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
+								(get_reward(gridWorld, current) + discountFactor * adjustedOffset);//oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
 							checkActions[3] += transition_probability(errorProbability, current, next, FORWARD_LEFT) *
-								(get_reward(gridWorld, current) + discountFactor * oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
+								(get_reward(gridWorld, current) + discountFactor * adjustedOffset);//oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
 							checkActions[4] += transition_probability(errorProbability, current, next, FORWARD_RIGHT) *
-								(get_reward(gridWorld, current) + discountFactor * oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
+								(get_reward(gridWorld, current) + discountFactor * adjustedOffset);//oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
 							checkActions[5] += transition_probability(errorProbability, current, next, BACKWARD_STILL) *
-								(get_reward(gridWorld, current) + discountFactor * oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
+								(get_reward(gridWorld, current) + discountFactor * adjustedOffset);//oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
 							checkActions[6] += transition_probability(errorProbability, current, next, FORWARD_STILL) *
-								(get_reward(gridWorld, current) + discountFactor * oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
+								(get_reward(gridWorld, current) + discountFactor * adjustedOffset);//oldValuesForStates[GRIDWORLD_ROWS - a - 1][b][c]);
 						}
 					}
 				}
@@ -1220,7 +1325,7 @@ int main(int argc, char** argv) {
 		gridWorld[1][0][k] = -100;
 		gridWorld[1][1][k] = 0;
 		gridWorld[1][2][k] = -10;
-		gridWorld[1][3][k] =  1;
+		gridWorld[1][3][k] = 0;//1;
 		gridWorld[1][4][k] = -10;
 		gridWorld[1][5][k] = -100;
 
@@ -1253,9 +1358,9 @@ int main(int argc, char** argv) {
 		gridWorld[5][5][k] = -100;
 	}
 
-	//gridWorld[1][3][5] = 1;
-	//gridWorld[1][3][6] = 1;
-	//gridWorld[1][3][7] = 1;
+	gridWorld[1][3][5] = 1;
+	gridWorld[1][3][6] = 1;
+	gridWorld[1][3][7] = 1;
 
 	state current;
 	current.x = 1;
