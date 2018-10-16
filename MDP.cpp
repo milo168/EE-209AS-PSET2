@@ -739,7 +739,7 @@ void generate_and_plot(ACTIONS*** action_policies, state initial, double errorPr
 		}
 		cout << "\n";
 	}
-
+	cout << "\n";
 	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
 		delete[] gridPrint[i];
 	}
@@ -1075,8 +1075,16 @@ void optimal_policy_iteration(double gridWorld[][GRIDWORLD_COLUMNS][12], double 
 		}
 	}
 
+	cout << "Trajectory of the robot for policy iteration" << "\n";
 	generate_and_plot(holdPolicies, current, errorProbability, goal);
-	cout << valueForStates[GRIDWORLD_ROWS - 4 - 1][1][6] << "\n";
+	cout << "Below is the grid at the same heading as the starting heading" << "\n";
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+			cout << setprecision(4) << valueForStates[GRIDWORLD_ROWS - i - 1][j][current.clock] << "\t\t";
+		}
+		cout << "\n";
+	}
+	cout << "Value at(" << current.x << "," << current.y << "," << current.clock << "): " << valueForStates[GRIDWORLD_ROWS - current.y - 1][current.x][current.clock] << "\n";
 
 	tmpPointerValues = valueForStates;
 	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
@@ -1288,8 +1296,17 @@ void optimal_value_iteration(double gridWorld[][GRIDWORLD_COLUMNS][12], double e
 	}
 
 	
+	cout << "Trajectory of the robot for value iteration" << "\n";
 	generate_and_plot(holdPolicies, current, errorProbability, goal);
-	cout << valueForStates[GRIDWORLD_ROWS - 4 - 1][1][6] << "\n";
+	cout << "Below is the grid at the same heading as the starting heading" << "\n";
+	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
+		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
+			cout << setprecision(4) << valueForStates[GRIDWORLD_ROWS - i - 1][j][current.clock] << "\t\t";
+		}
+		cout << "\n";
+	}
+
+	cout << "Value at (" << current.x << "," << current.y << "," << current.clock << "): " << valueForStates[GRIDWORLD_ROWS - current.y - 1][current.x][current.clock] << "\n";
 
 	for (int i = 0; i < GRIDWORLD_ROWS; i++) {
 		for (int j = 0; j < GRIDWORLD_COLUMNS; j++) {
@@ -1325,7 +1342,7 @@ int main(int argc, char** argv) {
 		gridWorld[1][0][k] = -100;
 		gridWorld[1][1][k] = 0;
 		gridWorld[1][2][k] = -10;
-		gridWorld[1][3][k] = 0;//1;
+		gridWorld[1][3][k] = 1;
 		gridWorld[1][4][k] = -10;
 		gridWorld[1][5][k] = -100;
 
@@ -1358,9 +1375,9 @@ int main(int argc, char** argv) {
 		gridWorld[5][5][k] = -100;
 	}
 
-	gridWorld[1][3][5] = 1;
-	gridWorld[1][3][6] = 1;
-	gridWorld[1][3][7] = 1;
+	//gridWorld[1][3][5] = 1;
+	//gridWorld[1][3][6] = 1;
+	//gridWorld[1][3][7] = 1;
 
 	state current;
 	current.x = 1;
@@ -1382,13 +1399,13 @@ int main(int argc, char** argv) {
 	chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
 
 	chrono::duration<double> timeSpan = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
-	cout << "Time it took to execute policy iteration in seconds: " << timeSpan.count() << "\n";
+	cout << "Time it took to execute policy iteration in seconds: " << timeSpan.count() << "\n\n";
 
 	t1 = chrono::high_resolution_clock::now();
 	optimal_value_iteration(gridWorld, errorProbability, discountFactor, current, goal);
 	t2 = chrono::high_resolution_clock::now();
 
 	timeSpan = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
-	cout << "Time it took to execute value iteration in seconds: " << timeSpan.count() << "\n";
+	cout << "Time it took to execute value iteration in seconds: " << timeSpan.count() << "\n\n";
 	return 0;
 }
